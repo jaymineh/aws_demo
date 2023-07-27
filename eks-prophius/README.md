@@ -9,7 +9,7 @@ In this project, I implemented an EKS (Elastic Kubernetes Search) cluster in AWS
 
 *Also note that my comments and observations would be included at intervals during the project and not necessarily at the end. Enjoy the ride ;)*
 
-**Step 1 - Create S3 bucket to host TF state file**
+**Step 1 - Create S3 Bucket To Host TF State File**
 ---
 
 - Create a new file called `bucket.tf` and input the code block below:
@@ -121,9 +121,23 @@ resource "aws_subnet" "private" {
 }
 ```
 
+- Create a new file called `output.tf`. This will be used to produce the outputs of the private and public subnets. Paste in the code below:
+
+```
+output "PublicIP" {
+  value = ["${aws_subnet.public.*.id}"]
+}
+
+output "PrivateIP" {
+  value = ["${aws_subnet.private.*.id}"]
+}
+```
+
+*Notice what is happening here. When the subnets were being created, they were created as a tuple and not as a list, because they have more than one value within. The "value" line basically interpolates the output so it can produce the content of the tuple, as doing it the same way you would do a string would lead to an error*
+
 ![VPC](images/vpc.png)
 
-**Step 3 - Create IGW & NAT gateway**
+**Step 3 - Create IGW & NAT Gateway**
 ---
 
 *The internet gateway in this scenario is used to reach the EKS clusters over the internet. I took some extra steps which will be explained later and installed kubernetes on my local PC to manage the EKS clusters from the terminal without going to the AWS portal. An alternative can be used to achieve this and it is called VPC endpoints. However, I opted to using an internet gateway*
@@ -166,7 +180,383 @@ resource "aws_nat_gateway" "nat" {
 }
 ```
 
-**Step 4 - 
+**Step 4 - Configure Routes**
 ---
 
--
+*Routes are basically what their name says they are. They are used to direct or "route" traffic between subnets and other resources*
+
+- Create a new file called `routes.tf` that would hold the routing information to be configured. See code below:
+
+```
+# Create private route table
+resource "aws_route_table" "privatertb" {
+    vpc_id = aws_vpc.prophius.id
+
+    tags = {
+        Name = "Private Route Table"
+    }
+}
+
+# Create public route table
+resource "aws_route_table" "publicrtb" {
+    vpc_id = aws_vpc.prophius.id
+
+    tags = {
+        Name = "Public Route Table"
+    }
+}
+
+# Create route for the private route table
+resource "aws_route" "privateroute" {
+    route_table_id = aws_route_table.privatertb.id
+    destination_cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.nat.id
+}
+
+# Create route for the public route table
+resource "aws_route" "publicroute" {
+    route_table_id = aws_route_table.publicrtb.id
+    destination_cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.ig.id
+}
+
+# Associate the private route table with the private subnet
+resource "aws_route_table_association" "privateasso" {
+  count = length(aws_subnet.private[*].id)
+  subnet_id = element(aws_subnet.private[*].id, count.index)
+  route_table_id = aws_route_table.privatertb.id
+}
+
+# Associate the private route table with the private subnet
+resource "aws_route_table_association" "publicasso" {
+  count = length(aws_subnet.public[*].id)
+  subnet_id = element(aws_subnet.public[*].id, count.index)
+  route_table_id = aws_route_table.publicrtb.id
+}
+```
+
+*Notice that the route tables were created first. The route tables hold the routing information that would be created. After, the routes themselves were created i.e the destination. Lastly, the route tables were attached to their respective subnets, which will be inherited by all resources placed within them.*
+
+**Step 5 - Setup The Security Group**
+---
+
+- Run `touch SG.tf` to create a new file that will be responsible for the security group creation.
+
+```
+resource "aws_security_group" "eksMain" {
+  name = "EKS Main"
+  description = "EKS Controller Traffic"
+  vpc_id = aws_vpc.prophius.id
+
+  dynamic "ingress" {
+    iterator = port
+    for_each = var.inEKSmain
+    content {
+      from_port = port.value
+      to_port = port.value
+      protocol = "TCP"
+      cidr_blocks = [var.vpc_cidr]
+    }
+  }
+
+  dynamic "egress" {
+    iterator = port
+    for_each = var.outEKSmain
+    content {
+      from_port = port.value
+      to_port = port.value
+      protocol = "TCP"
+      cidr_blocks = [var.vpc_cidr]
+    }
+  }
+
+  tags = {
+    Name = "eks Main"
+  }
+}
+
+resource "aws_security_group" "eksNode" {
+  name = "EKS Node"
+  description = "EKS Node Traffic"
+  vpc_id = aws_vpc.prophius.id
+
+  dynamic "ingress" {
+    iterator = port
+    for_each = var.inEKSworker
+    content {
+      from_port = port.value
+      to_port = port.value
+      protocol = "TCP"
+      cidr_blocks = [var.vpc_cidr]
+    }
+  }
+
+  dynamic "egress" {
+    iterator = port
+    for_each = var.outEKSworker
+    content {
+      from_port = port.value
+      to_port = port.value
+      protocol = "TCP"
+      cidr_blocks = [var.vpc_cidr]
+    }
+  }
+
+  tags = {
+    Name = "eks Node"
+  }
+}
+
+resource "aws_security_group" "sqlSG" {
+  name = "SQL"
+  description = "SQL traffic"
+  vpc_id = aws_vpc.prophius.id
+
+  dynamic "ingress" {
+    iterator = port
+    for_each = var.inSQL
+    content {
+      from_port = port.value
+      to_port = port.value
+      protocol = "TCP"
+      cidr_blocks = [var.vpc_cidr]
+    }
+  }
+
+  dynamic "egress" {
+    iterator = port
+    for_each = var.outSQL
+    content {
+      from_port = port.value
+      to_port = port.value
+      protocol = "TCP"
+      cidr_blocks = [var.vpc_cidr]
+    }
+  }
+
+  tags = {
+    Name = "sqlSG"
+  }
+}
+```
+
+*Notice that I didn't use the regular security group configuration that involves declaring the port values under "ingress" and "egress". I opted to use dynamic blocks as it makes the configuration look a lot cleaner and it also shows some level of understanding/experience with terraform. Details of how it works would be explained below*
+
+- Create another file called `SGrules.tf`. Paste in the code below:
+
+```
+variable "inEKSmain" {
+  type = list(number)
+  default = [10250,6443,443,2379,2380]
+}
+
+variable "outEKSmain" {
+    type = list(number)
+    default = [10250,6443,443,2379,2380]
+}
+
+variable "inEKSworker" {
+  type = list(number)
+  default = [10250,6443,443,2379,2380]
+}
+
+variable "outEKSworker" {
+    type = list(number)
+    default = [10250,6443,443,2379,2380]
+}
+
+variable "inSQL" {
+  type = list(number)
+  default = [3306,22]
+}
+
+variable "outSQL" {
+    type = list(number)
+    default = [80,443,22,3306]
+}
+```
+
+*This is where the magic happens. Notice in the `SGrules` file, variables are set and port numbers are declared in a numbered list. These values are now called in the `SG` file file when egress and ingress rules are to be set. This way, any resource can use an already predefined security goup without needing to redefine them. However for the sake of this demo, I created variables for EKSworker nodes to ease understanding but in reality, I may choose not to.*
+
+**Step 6 - Create MySQL Database**
+---
+
+*Since there are more than one availability zones, the best way to approach this is to use the AWS RDS instance. It is a scalable database system. Kind of like EC2 but for databases. This is much easier compared to launching EC2 instances into their subnets and running a0 script on the machine to create the database or even using a launch template*
+
+- Create a file called `rds.tf`.  Insert this code below into the file. It will create the MySQL database, assign it a DB name and create a user with a password.
+
+```
+# Create RDS
+resource "aws_db_instance" "MySQL" {
+  allocated_storage = 20
+  storage_type = "gp2"
+  engine = "mysql"
+  engine_version = "5.7"
+  instance_class = "db.t2.micro"
+  db_name = "ProphiusDB"
+  username = var.master-username
+  password = var.master-password
+  parameter_group_name = "default.mysql5.7"
+  db_subnet_group_name = aws_db_subnet_group.prophius-subnet.name
+  skip_final_snapshot = true
+  vpc_security_group_ids = [aws_security_group.sqlSG.id]
+  multi_az = "false"
+}
+```
+
+- Insert this next line to the file. It would dictate what subnet the MySQL instance would be deployed to:
+
+```
+# Select what subnet would be used for deploymtn.
+resource "aws_db_subnet_group" "prophius-subnet" {
+  name = "prophius-subnet"
+  subnet_ids = [aws_subnet.private[2].id, aws_subnet.private[3].id]
+}
+```
+
+**Step 7 - Create EKS Cluster**
+---
+
+- Create a new file called `main.tf`. This would house the code to create the EKS cluster from terraform. Before that, paste in te following codes to get the list of availaibel AZs and select the cloud provider.
+
+```
+# Get list of AZ
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+provider "aws" {
+  region = var.region
+}
+```
+
+- Now paste this code below in the same file:
+
+```
+# Create EKS cluster
+resource "aws_eks_cluster" "ProphiusEKS" {
+  name = "ProphiusEKS"
+  role_arn = aws_iam_role.eks-iam-role.arn
+
+  vpc_config {
+    subnet_ids = [aws_subnet.public[0].id, aws_subnet.public[1].id]
+  }
+
+  depends_on = [ 
+    aws_iam_role.eks-iam-role
+   ]
+
+  tags = {
+    Name = "ProphiusEKSCLuster"
+  }
+}
+```
+
+*The code above creates the EKS cluster and is deployed into two public subnets. Notice there is a dependency argument present in the code. It will be sorted below.*
+
+- Create a new file called `IAM-cluster.tf`. This houses the policy that would be referenced by the EKS cluster to be able to work. Without these roles, the EKS cluster cannot work. See code below:
+
+```
+resource "aws_iam_role" "eks-iam-role" {
+ name = "eks-iam-role"
+
+ path = "/"
+
+ assume_role_policy = <<EOF
+{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Principal": {
+    "Service": "eks.amazonaws.com"
+   },
+   "Action": "sts:AssumeRole"
+  }
+ ]
+}
+EOF
+
+}
+
+resource "aws_iam_role_policy_attachment" "AmazonEKSClusterPolicy" {
+ policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+ role    = aws_iam_role.eks-iam-role.name
+}
+resource "aws_iam_role_policy_attachment" "AmazonEC2ContainerRegistryReadOnly-EKS" {
+ policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+ role    = aws_iam_role.eks-iam-role.name
+}
+```
+
+*The `policy_attachment` resource is used to attach policies to the roles that we created. These policies set the "DOs" and "DONTs for the role*
+
+**Step 8 - Create EKS Worker Nodes
+---
+
+- Since the main nodes/cluster has been created, it is time for the worker nodes. Paste in the code below inside the same `main.tf` file.
+
+```
+# Create EKS worker nodes
+resource "aws_eks_node_group" "ProphiusNode" {
+  cluster_name = aws_eks_cluster.ProphiusEKS.name
+  node_group_name = "ProphiusEKSnodes"
+  node_role_arn  = aws_iam_role.workernodes.arn
+  subnet_ids = [aws_subnet.private[0].id, aws_subnet.private[1].id]
+  instance_types = ["t2.micro"]
+
+  scaling_config {
+    desired_size = 1
+    max_size = 2
+    min_size = 1
+  }
+
+  depends_on = [
+   aws_iam_role_policy_attachment.AmazonEKSWorkerNodePolicy,
+   aws_iam_role_policy_attachment.AmazonEKS_CNI_Policy
+  ]
+}
+```
+
+*These nodes are placed in the private subnet as they are not placed in the public subnet with the cluster. The instances are setup to go up to 2 max. There is also a dependency on some of the policies that are needed for the EKS worker nodes to work properly.*
+
+- Create a file called `IAM-cluster.tf`. Like the `IAM-node`, this holds the policy and role necessary for the worker nodes to work. Paste the code below in the file:
+
+```
+resource "aws_iam_role" "workernodes" {
+  name = "eks-node-group-example"
+ 
+  assume_role_policy = jsonencode({
+   Statement = [{
+    Action = "sts:AssumeRole"
+    Effect = "Allow"
+    Principal = {
+     Service = "ec2.amazonaws.com"
+    }
+   }]
+   Version = "2012-10-17"
+  })
+ }
+ 
+ resource "aws_iam_role_policy_attachment" "AmazonEKSWorkerNodePolicy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+  role    = aws_iam_role.workernodes.name
+ }
+ 
+ resource "aws_iam_role_policy_attachment" "AmazonEKS_CNI_Policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  role    = aws_iam_role.workernodes.name
+ }
+ 
+ resource "aws_iam_role_policy_attachment" "EC2InstanceProfileForImageBuilderECRContainerBuilds" {
+  policy_arn = "arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilderECRContainerBuilds"
+  role    = aws_iam_role.workernodes.name
+ }
+ 
+ resource "aws_iam_role_policy_attachment" "AmazonEC2ContainerRegistryReadOnly" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  role    = aws_iam_role.workernodes.name
+ }
+```
+
+*As seen above, four policies were attached to the worker nodes role. These are necessities to make the worker nodes work*
