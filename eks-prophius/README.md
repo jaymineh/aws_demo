@@ -642,3 +642,7 @@ resource "aws_ecr_lifecycle_policy" "ecrlifecycle_policy" {
 - After authenticating, push to your ECR using this command `docker push <IMAGE_NAME[:TAG]>`. See screenshot below for successful push of **Prophius Docker Image To AWS ECR**
 
 ![Docker Image](images/dockerimg.png)
+
+- Destroy infrastrutcure using `terraform destroy`.
+
+![Terraform Destroy](images/destroy.png)
