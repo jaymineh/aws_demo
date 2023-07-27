@@ -135,8 +135,6 @@ output "PrivateIP" {
 
 *Notice what is happening here. When the subnets were being created, they were created as a tuple and not as a list, because they have more than one value within. The "value" line basically interpolates the output so it can produce the content of the tuple, as doing it the same way you would do a string would lead to an error*
 
-![VPC](images/vpc.png)
-
 **Step 3 - Create IGW & NAT Gateway**
 ---
 
@@ -560,3 +558,87 @@ resource "aws_iam_role" "workernodes" {
 ```
 
 *As seen above, four policies were attached to the worker nodes role. These are necessities to make the worker nodes work*
+
+**Step 9 - Create ECR Repository**
+---
+
+*This is the repository that will hold the docker images when they are pushed from docker or uploaded from the portal*
+
+- Create `ecr.tf` and paste in the following code, which will create the ECR repo and setup a lifecycle policy that deletes any image that is over 30 days.
+
+```
+# Create ECR repository
+resource "aws_ecr_repository" "prophius_ecr" {
+  name = var.ecr
+  image_tag_mutability = "IMMUTABLE"
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
+# Create ECR lifecycle policy
+resource "aws_ecr_lifecycle_policy" "ecrlifecycle_policy" {
+  repository = aws_ecr_repository.prophius_ecr.name
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1,
+        description  = "Expire images older than 30 days",
+        selection    = {
+          tagStatus = "untagged",
+          countType = "sinceImagePushed",
+          countUnit = "days",
+          countNumber = 30
+        },
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
+```
+
+*Image tag was set to immutable for the sake of this demo. It may not be included in real life scenarios.*
+
+**Step 10 - Run Terraform**
+
+- With all the configuration that has been done, we can run `terraform plan` to see if the plan succeeds. After confirmation, run `terraform apply` to initiate the creation. See results below:
+
+![Terraform Create](images/create.png)
+
+![VPC](images/vpc.png)
+
+![MySQL](images/mysql.png)
+
+![EKS](images/eks.png)
+
+![ECR](images/ecr.png)
+
+**Optional Additional Step 1 - Manage EKS Cluster From Kubernetes CLI**
+---
+
+*This is an entirely optional step, which I added to give my submssion a different appeal. This step is used to link the EKS clusters in the cloud with kubernetes and have them managed as well. This is a very flexible method comoared to managing things from the portal. It also enhances automation and scripting and is generally more preferred over using the AWS portal*
+
+- Ensure AWS CLI, Kubectl & Docker are installed on your PC.
+
+- Configure kubectl to access the EKS cluster on your AWS account by running `aws eks update-kubeconfig --name YOUR_EKS_CLUSTER_NAME --region YOUR_AWS_REGION`.
+
+- To confirm that kubectl is properly configured, run `kubectl get nodes` to check the node status and `kubectl cluster-info` to check cluster information.
+
+**Optional Additional Step 2 - Test Deployed Infrastructure By Pushing Docker Image To AWS**
+---
+
+*This is another additional step of me just testing to see if the infrastructure I deployed is working as expected. I wouldn't want a scenario where the deployed infrastructure did not do what it was made for so I took the liberty of testing it to see it's effectiveness*
+
+- With Docker already installed on your device, run `docker version` to confirm if the docker daemon is running.
+
+- Create a simple docker image using this code `docker build -t YOUR_IMAGE_NAME:TAG .` *The one I used is inside the repo as `nginx-image`*. *Don't forget to change directory to where the dockerfile is.*
+
+*If you get this error `ERROR: failed to solve: ubuntu:18.04: error getting credentials - err: exec: "docker-credential-desktop": executable file not found in %PATH%, out: ``)`, check ![here](https://stackoverflow.com/questions/65896681/exec-docker-credential-desktop-exe-executable-file-not-found-in-path) for the resolution.*
+
+- After docker build is complete, run this code to authenticate the docker CLI to your AWS CLI `aws ecr get-login-password --region <REPOSITORY_REGION> | docker login --username AWS --password-stdin <REPOSITORY_URI>`
+
+- After authenticating, push to your ECR using this command `docker push <IMAGE_NAME[:TAG]>`. See screenshot below for successful push of **Prophius Docker Image To AWS ECR**
+
+![Docker Image](images/dockerimg.png)
