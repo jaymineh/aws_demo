@@ -1,3 +1,3 @@
 # EKS cluster
 
-![AWS Infrastructure](images/prophius.png)
+![AWS Infrastructure](images/prophiusinfra.png)
