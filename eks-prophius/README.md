@@ -135,6 +135,61 @@ output "PrivateIP" {
 
 *Notice what is happening here. When the subnets were being created, they were created as a tuple and not as a list, because they have more than one value within. The "value" line basically interpolates the output so it can produce the content of the tuple, as doing it the same way you would do a string would lead to an error*
 
+- Create 2 files called `variable.tf` and `terraform.tfvars`. These files holds the values of variables. Variables are setup in the `variable` file while the value resides in the `terraform` file. Input this code in the `variable.tf` file:
+
+```
+variable "region" {
+  default = "us_east-1"
+}
+
+variable "vpc_cidr" {
+    default = "40.0.0.0/16"
+}
+
+variable "preferred_number_of_public_subnets" {
+    default = null
+}
+
+variable "preferred_number_of_private_subnets" {
+    default = null
+}
+
+variable "ami" {
+  default = "ami-026ebd4cfe2c043b2"
+}
+
+variable "name" {
+  default = "Prophius"
+  type = string
+}
+
+variable "keypair" {
+    type = string
+}
+
+variable "account_no" {
+    type = number
+}
+```
+
+- In the `terraform.tfvars` file, insert the below:
+
+```
+region = "us-east-1"
+
+vpc_cidr = "40.0.0.0/16"
+
+preferred_number_of_private_subnets = 4
+
+preferred_number_of_public_subnets = 2
+
+ami = "ami-026ebd4cfe2c043b2"
+
+keypair = "<yourKeypair>"
+
+account_no = <yourAcctNo>
+```
+
 **Step 3 - Create IGW & NAT Gateway**
 ---
 
@@ -412,6 +467,26 @@ resource "aws_db_subnet_group" "prophius-subnet" {
 }
 ```
 
+- Update the `variables.tf` file with the following:
+
+```
+variable "master-username" {
+    type = string
+}
+
+variable "master-password" {
+    type = string 
+}
+```
+
+- Update the `terraform.tfvars` file with the following:
+
+```
+master-username = "yourUsername"
+
+master-password = "yourPassword"
+```
+
 **Step 7 - Create EKS Cluster**
 ---
 
@@ -600,6 +675,21 @@ resource "aws_ecr_lifecycle_policy" "ecrlifecycle_policy" {
 ```
 
 *Image tag was set to immutable for the sake of this demo. It may not be included in real life scenarios.*
+
+- Update the `variables.tf` file with this:
+
+```
+variable "ecr" {
+  type = string
+  description = "ECR name"
+}
+```
+
+- Update the `terraform.tfvars` file with the code below:
+
+```
+ecr = "prophius_ecr"
+```
 
 **Step 10 - Run Terraform**
 
