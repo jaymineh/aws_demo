@@ -1,0 +1,56 @@
+# Create s3 bucket
+resource "aws_s3_bucket" "prophius-bucket-aws" {
+  bucket = "prophius-bucket"
+  force_destroy = true
+}
+
+# Enable versioning on s3 bucket
+resource "aws_s3_bucket_versioning" "version" {
+  bucket = aws_s3_bucket.prophius-bucket-aws.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Enable encryption for s3 bucket
+resource "aws_s3_bucket_server_side_encryption_configuration" "first" {
+  bucket = aws_s3_bucket.prophius-bucket-aws.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+#Create dynamo DB for terraform locks
+resource "aws_dynamodb_table" "prophius_locks_aws" {
+  name         = "prophius-locks"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "LockID"
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
+}
+
+# Push state file to cloud
+terraform {
+  backend "s3" {
+    bucket         = "prophius-buck"
+    key            = "prophius/s3/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "prophius-locks"
+    encrypt        = true
+  }
+}
+
+resource "aws_instance" "mysql" {
+  ami = var.ami
+  instance_type = "t2.micro"
+  subnet_id = aws_subnet.private[2].id
+  security_groups = [aws_security_group.sqlSG.id]
+  key_name = var.keypair
+  tags = {
+    Name = "MySQL DB"
+  }
+}
