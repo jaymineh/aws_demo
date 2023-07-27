@@ -8,9 +8,9 @@ preferred_number_of_public_subnets = 2
 
 ami = "ami-026ebd4cfe2c043b2"
 
-keypair = "Jemine-EC5"
+keypair = "<yourKeypair>"
 
-account_no = 894194274688
+account_no = <yourPassword>
 
 master-username = "prophius"
 
