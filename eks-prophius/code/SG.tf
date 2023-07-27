@@ -62,38 +62,6 @@ resource "aws_security_group" "eksNode" {
   }
 }
 
-resource "aws_security_group" "ecrSG" {
-  name = "ECR"
-  description = "ECR traffic"
-  vpc_id = aws_vpc.prophius.id
-
-  dynamic "ingress" {
-    iterator = port
-    for_each = var.inECR
-    content {
-      from_port = port.value
-      to_port = port.value
-      protocol = "TCP"
-      cidr_blocks = [var.vpc_cidr]
-    }
-  }
-
-  dynamic "egress" {
-    iterator = port
-    for_each = var.outECR
-    content {
-      from_port = port.value
-      to_port = port.value
-      protocol = "TCP"
-      cidr_blocks = [var.vpc_cidr]
-    }
-  }
-
-  tags = {
-    Name = "ecrSG"
-  }
-}
-
 resource "aws_security_group" "sqlSG" {
   name = "SQL"
   description = "SQL traffic"

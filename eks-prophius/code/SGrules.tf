@@ -18,16 +18,6 @@ variable "outEKSworker" {
     default = [10250,6443,443,2379,2380]
 }
 
-variable "inECR" {
-  type = list(number)
-  default = [80,443]
-}
-
-variable "outECR" {
-    type = list(number)
-    default = [80,443]
-}
-
 variable "inSQL" {
   type = list(number)
   default = [3306,22]
