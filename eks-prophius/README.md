@@ -635,7 +635,7 @@ resource "aws_ecr_lifecycle_policy" "ecrlifecycle_policy" {
 
 - Create a simple docker image using this code `docker build -t YOUR_IMAGE_NAME:TAG .` *The one I used is inside the repo as `nginx-image`*. *Don't forget to change directory to where the dockerfile is.*
 
-*If you get this error `ERROR: failed to solve: ubuntu:18.04: error getting credentials - err: exec: "docker-credential-desktop": executable file not found in %PATH%, out: ``)`, check ![here](https://stackoverflow.com/questions/65896681/exec-docker-credential-desktop-exe-executable-file-not-found-in-path) for the resolution.*
+*If you get this error `ERROR: failed to solve: ubuntu:18.04: error getting credentials - err: exec: "docker-credential-desktop": executable file not found in %PATH%, out: ``)`, check [here](https://stackoverflow.com/questions/65896681/exec-docker-credential-desktop-exe-executable-file-not-found-in-path) for the resolution.*
 
 - After docker build is complete, run this code to authenticate the docker CLI to your AWS CLI `aws ecr get-login-password --region <REPOSITORY_REGION> | docker login --username AWS --password-stdin <REPOSITORY_URI>`
 
