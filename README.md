@@ -564,7 +564,7 @@ resource "aws_iam_role_policy_attachment" "AmazonEC2ContainerRegistryReadOnly-EK
 
 *The `policy_attachment` resource is used to attach policies to the roles that we created. These policies set the "DOs" and "DONTs for the role*
 
-**Step 8 - Create EKS Worker Nodes
+**Step 8 - Create EKS Worker Nodes**
 ---
 
 - Since the main nodes/cluster has been created, it is time for the worker nodes. Paste in the code below inside the same `main.tf` file.
