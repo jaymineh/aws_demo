@@ -1,6 +1,6 @@
 # EKS + ECR Deployment
 
-In this project, I implemented an EKS (Elastic Kubernetes Search) cluster in AWS, with the addition of an ECR (Elastic Container Registry) and RDS instances running MySQL database. High availability is taken into consideration in this project to increase reliability of the cluster and the rest infrastructure. Additional steps (at my own discretion) are included to test the infrastructure if it was set up correctly. See infrastructure diagram below:
+In this project, I implemented an EKS (Elastic Kubernetes Service) cluster in AWS, with the addition of an ECR (Elastic Container Registry) and RDS instances running MySQL database. High availability is taken into consideration in this project to increase reliability of the cluster and the rest infrastructure. Additional steps (at my own discretion) are included to test the infrastructure if it was set up correctly. See infrastructure diagram below:
 
 ![AWS Infrastructure](images/prophiusinfra.png)
 
